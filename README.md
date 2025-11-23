@@ -14,6 +14,10 @@ A web-based tool for generating Hammer Editor prefabs (VMF files) with real-time
 - **2D Views**: Top, Front, and Side views like Hammer Editor
 - **VMF Export**: Download generated prefabs as VMF files
 
+## Live version
+
+You can use it live on https://linkpad.github.io/hammer-surf-ramp-generator/
+
 ## Getting Started
 
 ### Installation
