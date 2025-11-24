@@ -23,8 +23,7 @@
   let updatingFromSlope = false;
 
   function calculateSlopeAngle(width, height) {
-    const halfWidth = width / 2;
-    const angleRad = Math.atan2(height, halfWidth);
+    const angleRad = Math.atan2(height, width);
     const angleDeg = (angleRad * 180) / Math.PI;
     return Math.round(angleDeg * 100) / 100;
   }
@@ -34,8 +33,7 @@
     updatingFromSlope = true;
     
     const angleRad = (newSlopeAngle * Math.PI) / 180;
-    const halfWidth = params.width / 2;
-    const newHeight = Math.round(Math.tan(angleRad) * halfWidth);
+    const newHeight = Math.round(Math.tan(angleRad) * params.width);
     
     params.height = Math.max(64, Math.min(1024, newHeight));
     
