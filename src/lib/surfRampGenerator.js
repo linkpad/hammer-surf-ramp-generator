@@ -63,6 +63,14 @@ export class SurfRampGenerator {
     const leftY = -w / 2;
     const rightY = w / 2;
     const centerY = 0;
+    
+    // For Left/Right surf, anchor at the base corner (right-angle corner)
+    let yOffset = 0;
+    if (surfEnum === 'Left') {
+      yOffset = -leftY; // Shift so leftY becomes 0
+    } else if (surfEnum === 'Right') {
+      yOffset = -rightY; // Shift so rightY becomes 0
+    }
 
     const profiles = [];
 
@@ -75,15 +83,15 @@ export class SurfRampGenerator {
         ]);
       } else if (surfEnum === 'Left') {
         profiles.push([
-          [0, leftY, topZ],
-          [0, rightY, bottomZ],
-          [0, leftY, bottomZ]
+          [0, leftY + yOffset, topZ],
+          [0, rightY + yOffset, bottomZ],
+          [0, leftY + yOffset, bottomZ]
         ]);
       } else {
         profiles.push([
-          [0, rightY, topZ],
-          [0, rightY, bottomZ],
-          [0, leftY, bottomZ]
+          [0, rightY + yOffset, topZ],
+          [0, rightY + yOffset, bottomZ],
+          [0, leftY + yOffset, bottomZ]
         ]);
       }
     } else {
@@ -141,12 +149,12 @@ export class SurfRampGenerator {
         ]);
 
       } else if (surfEnum === 'Left') {
-        const p1 = [0, leftY, topZ];
-        const p2 = [0, rightY, bottomZ];
+        const p1 = [0, leftY + yOffset, topZ];
+        const p2 = [0, rightY + yOffset, bottomZ];
         profiles.push(generateThickenedSegment(p1, p2));
       } else {
-        const p1 = [0, leftY, bottomZ];
-        const p2 = [0, rightY, topZ];
+        const p1 = [0, leftY + yOffset, bottomZ];
+        const p2 = [0, rightY + yOffset, topZ];
         profiles.push(generateThickenedSegment(p1, p2));
       }
     }
