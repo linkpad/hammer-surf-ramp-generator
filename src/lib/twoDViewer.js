@@ -112,8 +112,17 @@ export class TwoDViewer {
         }
     }
     
-    const width = maxX - minX;
-    const height = this.viewType === 'top' ? maxZ - minZ : maxY - minY;
+    let width, height;
+    if (this.viewType === 'top') {
+      width = maxX - minX;
+      height = maxY - minY;
+    } else if (this.viewType === 'front') {
+      width = maxX - minX;
+      height = maxZ - minZ;
+    } else if (this.viewType === 'side') {
+      width = maxY - minY;
+      height = maxZ - minZ;
+    }
     const maxDim = Math.max(width, height);
     
     if (!isFinite(maxDim) || maxDim === 0) return;
@@ -126,13 +135,13 @@ export class TwoDViewer {
     
     if (this.viewType === 'top') {
       this.offsetX = this.canvas.width / 2 - (minX + maxX) / 2 * this.scale;
-      this.offsetY = this.canvas.height / 2 - (minZ + maxZ) / 2 * this.scale;
+      this.offsetY = this.canvas.height / 2 + (minY + maxY) / 2 * this.scale;
     } else if (this.viewType === 'front') {
       this.offsetX = this.canvas.width / 2 - (minX + maxX) / 2 * this.scale;
-      this.offsetY = this.canvas.height / 2 - (minY + maxY) / 2 * this.scale;
+      this.offsetY = this.canvas.height / 2 + (minZ + maxZ) / 2 * this.scale;
     } else if (this.viewType === 'side') {
-      this.offsetX = this.canvas.width / 2 - (minZ + maxZ) / 2 * this.scale;
-      this.offsetY = this.canvas.height / 2 - (minY + maxY) / 2 * this.scale;
+      this.offsetX = this.canvas.width / 2 - (minY + maxY) / 2 * this.scale;
+      this.offsetY = this.canvas.height / 2 + (minZ + maxZ) / 2 * this.scale;
     }
     
     this.draw();
@@ -145,7 +154,7 @@ export class TwoDViewer {
     switch(this.viewType) {
       case 'top':
         px = x * this.scale + this.offsetX;
-        py = z * this.scale + this.offsetY;
+        py = -y * this.scale + this.offsetY;
         break;
       case 'front':
         px = x * this.scale + this.offsetX;
