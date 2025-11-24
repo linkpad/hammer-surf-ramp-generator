@@ -4,22 +4,35 @@
   import { ThreeViewer } from './lib/threeViewer.js';
   import { TwoDViewer } from './lib/twoDViewer.js';
 
-  let params = {
+  // Shared parameters across all ramps
+  let sharedParams = {
     rampName: 'ramp',
     materialName: 'dev/dev_measuregeneric01',
     styleEnum: 'Wedge',
     thickness: 32,
     surfEnum: 'Both',
-    rampEnum: 'Right',
     width: 256,
     height: 320,
     smoothness: 16,
-    angle: 90,
-    size: 1024,
     uvScale: 0.25
   };
 
-  $: slopeAngle = calculateSlopeAngle(params.width, params.height);
+  // Individual ramp configurations
+  let ramps = [
+    {
+      id: 1,
+      rampEnum: 'Right',
+      angle: 90,
+      size: 1024,
+      smoothness: 16
+    }
+  ];
+
+  let nextRampId = 2;
+  let selectedRampIndex = 0;
+  let connectionMode = 'end'; // 'start' or 'end'
+
+  $: slopeAngle = calculateSlopeAngle(sharedParams.width, sharedParams.height);
   let updatingFromSlope = false;
 
   function calculateSlopeAngle(width, height) {
@@ -33,17 +46,17 @@
     updatingFromSlope = true;
     
     const angleRad = (newSlopeAngle * Math.PI) / 180;
-    const newHeight = Math.round(Math.tan(angleRad) * params.width);
+    const newHeight = Math.round(Math.tan(angleRad) * sharedParams.width);
     
-    params.height = Math.max(64, Math.min(1024, newHeight));
+    sharedParams.height = Math.max(64, Math.min(1024, newHeight));
     
-    generateRamp();
+    generateAllRamps();
     updatingFromSlope = false;
   }
 
   function onWidthHeightChange() {
     if (!updatingFromSlope) {
-      generateRamp();
+      generateAllRamps();
     }
   }
 
@@ -56,7 +69,7 @@
   let topViewer;
   let frontViewer;
   let sideViewer;
-  let rampGenerator;
+  let generatedRamps = null;
 
   onMount(() => {
     threeViewer = new ThreeViewer(threeContainer);
@@ -64,7 +77,7 @@
     frontViewer = new TwoDViewer(frontViewCanvas, 'front');
     sideViewer = new TwoDViewer(sideViewCanvas, 'side');
     
-    generateRamp();
+    generateAllRamps();
     
     window.addEventListener('resize', handleResize);
     handleResize();
@@ -86,29 +99,75 @@
     if (sideViewer) sideViewer.resize();
   }
 
-  function generateRamp() {
-    rampGenerator = new SurfRampGenerator(params);
-    const geometryData = rampGenerator.getVisualizationData();
+  function addRamp() {
+    ramps = [...ramps, {
+      id: nextRampId++,
+      rampEnum: 'Right',
+      angle: 90,
+      size: 1024,
+      smoothness: sharedParams.smoothness
+    }];
+    selectedRampIndex = ramps.length - 1;
+    generateAllRamps();
+  }
+
+  function removeRamp(index) {
+    if (ramps.length > 1) {
+      ramps = ramps.filter((_, i) => i !== index);
+      if (selectedRampIndex >= ramps.length) {
+        selectedRampIndex = ramps.length - 1;
+      }
+      generateAllRamps();
+    }
+  }
+
+  function selectRamp(index) {
+    selectedRampIndex = index;
+  }
+
+  function generateAllRamps() {
+    // Ensure all ramps have smoothness property (for backward compatibility)
+    ramps = ramps.map(ramp => ({
+      ...ramp,
+      smoothness: ramp.smoothness !== undefined ? ramp.smoothness : sharedParams.smoothness
+    }));
     
-    threeViewer.updateRamp(geometryData);
-    topViewer.updateGeometry(geometryData);
-    frontViewer.updateGeometry(geometryData);
-    sideViewer.updateGeometry(geometryData);
+    generatedRamps = SurfRampGenerator.generateConnectedRamps(sharedParams, ramps, connectionMode);
+    
+    const combinedGeometry = {
+      faces: generatedRamps.faces,
+      geometry: generatedRamps.combinedGeometry
+    };
+    
+    threeViewer.updateRamp(combinedGeometry);
+    topViewer.updateGeometry(combinedGeometry);
+    frontViewer.updateGeometry(combinedGeometry);
+    sideViewer.updateGeometry(combinedGeometry);
   }
 
   function downloadVMF() {
-    if (!rampGenerator) {
-      generateRamp();
+    if (!generatedRamps || generatedRamps.ramps.length === 0) {
+      generateAllRamps();
     }
     
-    const vmfGenerator = rampGenerator.generateVMF();
+    if (!generatedRamps || generatedRamps.ramps.length === 0) {
+      return;
+    }
+    
+    // Use unified VMF generation for connected ramps
+    const vmfGenerator = SurfRampGenerator.generateConnectedVMF(generatedRamps);
+    
+    if (!vmfGenerator) {
+      return;
+    }
+    
     const vmfContent = vmfGenerator.generate();
     
     const blob = new Blob([vmfContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${params.rampName}.vmf`;
+    a.download = `${sharedParams.rampName}.vmf`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -325,6 +384,78 @@
     color: #aaa;
     pointer-events: none;
   }
+
+  .add-ramp-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    float: right;
+    margin-top: -2px;
+  }
+
+  .ramps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .ramp-item {
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-radius: 4px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .ramp-item:hover {
+    border-color: #4a9eff;
+  }
+
+  .ramp-item.selected {
+    border-color: #4a9eff;
+    background: #222;
+  }
+
+  .ramp-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .ramp-item-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4a9eff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .delete-btn {
+    padding: 2px 8px;
+    font-size: 16px;
+    background: #d32f2f;
+    min-width: auto;
+    line-height: 1;
+  }
+
+  .delete-btn:hover {
+    background: #b71c1c;
+  }
+
+  .ramp-item-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ramp-item-summary {
+    font-size: 11px;
+    color: #888;
+  }
 </style>
 
 <div class="app">
@@ -335,29 +466,29 @@
     </div>
     
     <div class="section">
-      <div class="section-title">Names</div>
+      <div class="section-title">Shared Properties</div>
       <div class="control-group">
-        <label>Ramp Name</label>
-        <input type="text" bind:value={params.rampName} on:input={generateRamp} />
+        <label>Base Name</label>
+        <input type="text" bind:value={sharedParams.rampName} on:input={generateAllRamps} />
       </div>
       <div class="control-group">
         <label>Material Name</label>
-        <input type="text" bind:value={params.materialName} on:input={generateRamp} />
+        <input type="text" bind:value={sharedParams.materialName} on:input={generateAllRamps} />
       </div>
     </div>
 
     <div class="section">
-      <div class="section-title">Slope Dimensions</div>
+      <div class="section-title">Slope Dimensions (Shared)</div>
       <div class="control-row">
         <div class="control-group">
           <label>Width</label>
-          <input type="range" min="64" max="1024" step="8" bind:value={params.width} on:input={onWidthHeightChange} />
-          <input type="number" min="64" max="1024" step="8" bind:value={params.width} on:input={onWidthHeightChange} />
+          <input type="range" min="64" max="1024" step="8" bind:value={sharedParams.width} on:input={onWidthHeightChange} />
+          <input type="number" min="64" max="1024" step="8" bind:value={sharedParams.width} on:input={onWidthHeightChange} />
         </div>
         <div class="control-group">
           <label>Height</label>
-          <input type="range" min="64" max="1024" step="8" bind:value={params.height} on:input={onWidthHeightChange} />
-          <input type="number" min="64" max="1024" step="8" bind:value={params.height} on:input={onWidthHeightChange} />
+          <input type="range" min="64" max="1024" step="8" bind:value={sharedParams.height} on:input={onWidthHeightChange} />
+          <input type="number" min="64" max="1024" step="8" bind:value={sharedParams.height} on:input={onWidthHeightChange} />
         </div>
       </div>
       <div class="control-group">
@@ -368,27 +499,27 @@
     </div>
 
     <div class="section">
-      <div class="section-title">Ramp Properties</div>
+      <div class="section-title">Ramp Style (Shared)</div>
       
       <div class="control-group">
         <label>Ramp Style</label>
-        <select bind:value={params.styleEnum} on:change={generateRamp}>
+        <select bind:value={sharedParams.styleEnum} on:change={generateAllRamps}>
           <option value="Wedge">Wedge</option>
           <option value="Thin">Thin</option>
         </select>
       </div>
 
-      {#if params.styleEnum === 'Thin'}
+      {#if sharedParams.styleEnum === 'Thin'}
         <div class="control-group">
           <label>Thickness</label>
-          <input type="range" min="1" max="128" step="1" bind:value={params.thickness} on:input={generateRamp} />
-          <input type="number" min="1" max="128" step="1" bind:value={params.thickness} on:input={generateRamp} />
+          <input type="range" min="1" max="128" step="1" bind:value={sharedParams.thickness} on:input={generateAllRamps} />
+          <input type="number" min="1" max="128" step="1" bind:value={sharedParams.thickness} on:input={generateAllRamps} />
         </div>
       {/if}
 
       <div class="control-group">
         <label>Surf Direction</label>
-        <select bind:value={params.surfEnum} on:change={generateRamp}>
+        <select bind:value={sharedParams.surfEnum} on:change={generateAllRamps}>
           <option value="Left">Left</option>
           <option value="Right">Right</option>
           <option value="Both">Both</option>
@@ -396,39 +527,81 @@
       </div>
 
       <div class="control-group">
-        <label>Ramp Direction</label>
-        <select bind:value={params.rampEnum} on:change={generateRamp}>
-          <option value="Left">Left</option>
-          <option value="Right">Right</option>
-          <option value="Up">Up</option>
-          <option value="Down">Down</option>
-          <option value="Dip">Dip</option>
-          <option value="Arc">Arc</option>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label>Smoothness</label>
-        <input type="range" min="3" max="128" step="1" bind:value={params.smoothness} on:input={generateRamp} />
-        <input type="number" min="3" max="128" step="1" bind:value={params.smoothness} on:input={generateRamp} />
-      </div>
-
-      <div class="control-group">
-        <label>Angle (degrees)</label>
-        <input type="range" min="0" max="360" step="1" bind:value={params.angle} on:input={generateRamp} />
-        <input type="number" min="0" max="360" step="1" bind:value={params.angle} on:input={generateRamp} />
-      </div>
-
-      <div class="control-group">
-        <label>Size</label>
-        <input type="range" min="0" max="2048" step="16" bind:value={params.size} on:input={generateRamp} />
-        <input type="number" min="0" max="2048" step="16" bind:value={params.size} on:input={generateRamp} />
+        <label>Default Smoothness (for new ramps)</label>
+        <input type="range" min="3" max="128" step="1" bind:value={sharedParams.smoothness} />
+        <input type="number" min="3" max="128" step="1" bind:value={sharedParams.smoothness} />
       </div>
 
       <div class="control-group">
         <label>UV Scale</label>
-        <input type="range" min="0.05" max="10" step="0.05" bind:value={params.uvScale} on:input={generateRamp} />
-        <input type="number" min="0.05" max="10" step="0.05" bind:value={params.uvScale} on:input={generateRamp} />
+        <input type="range" min="0.05" max="10" step="0.05" bind:value={sharedParams.uvScale} on:input={generateAllRamps} />
+        <input type="number" min="0.05" max="10" step="0.05" bind:value={sharedParams.uvScale} on:input={generateAllRamps} />
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">
+        Ramps List
+        <button class="add-ramp-btn" on:click={addRamp}>+ Add Ramp</button>
+      </div>
+      
+      <div class="control-group">
+        <label>Connection Mode</label>
+        <select bind:value={connectionMode} on:change={generateAllRamps}>
+          <option value="end">Connect at End</option>
+          <option value="start">Connect at Start</option>
+        </select>
+      </div>
+
+      <div class="ramps-list">
+        {#each ramps as ramp, index (ramp.id)}
+          <div class="ramp-item" class:selected={selectedRampIndex === index} on:click={() => selectRamp(index)} on:keydown={(e) => e.key === 'Enter' && selectRamp(index)} role="button" tabindex="0">
+            <div class="ramp-item-header">
+              <span class="ramp-item-title">Ramp {index + 1}</span>
+              {#if ramps.length > 1}
+                <button class="delete-btn" on:click|stopPropagation={() => removeRamp(index)}>×</button>
+              {/if}
+            </div>
+            
+            {#if selectedRampIndex === index}
+              <div class="ramp-item-controls">
+                <div class="control-group">
+                  <label>Ramp Direction</label>
+                  <select bind:value={ramp.rampEnum} on:change={generateAllRamps}>
+                    <option value="Left">Left</option>
+                    <option value="Right">Right</option>
+                    <option value="Up">Up</option>
+                    <option value="Down">Down</option>
+                    <option value="Dip">Dip</option>
+                    <option value="Arc">Arc</option>
+                  </select>
+                </div>
+
+                <div class="control-group">
+                  <label>Angle (degrees)</label>
+                  <input type="range" min="0" max="360" step="1" bind:value={ramp.angle} on:input={generateAllRamps} />
+                  <input type="number" min="0" max="360" step="1" bind:value={ramp.angle} on:input={generateAllRamps} />
+                </div>
+
+                <div class="control-group">
+                  <label>Size</label>
+                  <input type="range" min="0" max="2048" step="16" bind:value={ramp.size} on:input={generateAllRamps} />
+                  <input type="number" min="0" max="2048" step="16" bind:value={ramp.size} on:input={generateAllRamps} />
+                </div>
+
+                <div class="control-group">
+                  <label>Smoothness</label>
+                  <input type="range" min="3" max="128" step="1" bind:value={ramp.smoothness} on:input={generateAllRamps} />
+                  <input type="number" min="3" max="128" step="1" bind:value={ramp.smoothness} on:input={generateAllRamps} />
+                </div>
+              </div>
+            {:else}
+              <div class="ramp-item-summary">
+                <div>{ramp.rampEnum} • {ramp.angle}° • {ramp.size}u • {ramp.smoothness} segs</div>
+              </div>
+            {/if}
+          </div>
+        {/each}
       </div>
     </div>
 

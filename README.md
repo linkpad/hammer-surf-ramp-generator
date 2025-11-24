@@ -47,6 +47,24 @@ npm run build
 3. Click "Download VMF" to export the prefab
 4. Import the VMF file into Hammer Editor
 
+## Testing
+
+The project includes a comprehensive **regression test suite** with **35 test cases** covering all ramp configurations.
+
+### Quick Test
+
+```bash
+# Run regression tests (validates current code against ground truth)
+node validateTestFiles.js
+```
+
+### Generate Test Files
+
+```bash
+# Regenerate all ground truth VMF files
+node generateTestVMFs.js
+```
+
 ## License
 
 MIT
