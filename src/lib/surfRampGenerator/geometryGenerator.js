@@ -3,17 +3,19 @@ import { generateProfiles } from './profileGenerator.js';
 
 const RAMP_DIRECTION = {
   HORIZONTAL: ['Left', 'Right'],
-  VERTICAL: ['Up', 'Down', 'Dip', 'Arc']
+  VERTICAL: ['Up', 'Down'],
+  STRAIGHT: ['Straight']
 };
 
 export function generateGeometry(params) {
   const { smoothness, angle, size, rampEnum, styleEnum, thickness, surfEnum, height } = params;
 
   const baseProfiles = generateProfiles(params);
+  const isStraight = rampEnum === 'Straight' || angle === 0;
   const angleRad = (angle * Math.PI) / 180;
-  const segmentCount = angle === 0 ? 1 : smoothness;
+  const segmentCount = isStraight ? 1 : smoothness;
 
-  if (angle === 0) {
+  if (isStraight) {
     return generateStraightGeometry(baseProfiles, size, styleEnum, surfEnum, rampEnum, thickness);
   }
 
@@ -37,8 +39,9 @@ export function generateGeometry(params) {
 function generateStraightGeometry(baseProfiles, size, styleEnum, surfEnum, rampEnum, thickness) {
   const solids = baseProfiles.map(profile => {
     const reversedProfile = [...profile].reverse();
-    const startVertices = reversedProfile.map(v => [...v]);
-    const endVertices = reversedProfile.map(v => [v[0] + size, v[1], v[2]]);
+    // Ramp extends from -size to 0, so the "end" is at the origin
+    const startVertices = reversedProfile.map(v => [v[0] - size, v[1], v[2]]);
+    const endVertices = reversedProfile.map(v => [...v]);
 
     return {
       vertices: [startVertices, endVertices],
@@ -46,9 +49,11 @@ function generateStraightGeometry(baseProfiles, size, styleEnum, surfEnum, rampE
     };
   });
 
+  const clipSolids = generateStraightClipSolids(baseProfiles, size, styleEnum, surfEnum);
+
   return {
     solids,
-    clipSolids: [],
+    clipSolids,
     segments: 1,
     styleEnum,
     surfEnum,
@@ -59,14 +64,86 @@ function generateStraightGeometry(baseProfiles, size, styleEnum, surfEnum, rampE
   };
 }
 
+function generateStraightClipSolids(baseProfiles, size, styleEnum, surfEnum) {
+  const offsetAmount = 1.0;
+
+  let clipProfiles = baseProfiles.map(profile => profile.map(v => [...v]));
+
+  const applyOffset = (point1, point2, keepPoint1Z = false, keepPoint2Z = false) => {
+    const dy = point2[1] - point1[1];
+    const dz = point2[2] - point1[2];
+    const length = Math.sqrt(dy * dy + dz * dz);
+    if (length === 0) return;
+
+    const normalY = -dz / length;
+    const normalZ = dy / length;
+    const offsetY = normalY * offsetAmount;
+    const offsetZ = normalZ * offsetAmount;
+
+    const originalZ1 = point1[2];
+    const originalZ2 = point2[2];
+
+    point1[1] += offsetY;
+    point1[2] += offsetZ;
+    point2[1] += offsetY;
+    point2[2] += offsetZ;
+
+    if (keepPoint1Z) point1[2] = originalZ1;
+    if (keepPoint2Z) point2[2] = originalZ2;
+  };
+
+  if (styleEnum === 'Wedge') {
+    if (surfEnum === 'Both') {
+      const profile = clipProfiles[0];
+      const peak = [...profile[0]];
+      const bottomRight = [...profile[1]];
+      const bottomLeft = [...profile[2]];
+      const bottomCenter = [0, 0, 0];
+
+      const peakL = [...peak];
+      const bottomCenterL = [...bottomCenter];
+      const bottomLeftL = [...bottomLeft];
+      applyOffset(bottomLeftL, peakL, true, false);
+      const leftProfile = [peakL, bottomCenterL, bottomLeftL];
+
+      const peakR = [...peak];
+      const bottomRightR = [...bottomRight];
+      const bottomCenterR = [...bottomCenter];
+      applyOffset(peakR, bottomRightR, false, true);
+      const rightProfile = [peakR, bottomRightR, bottomCenterR];
+
+      clipProfiles = [leftProfile, rightProfile];
+    } else if (surfEnum === 'Left') {
+      applyOffset(clipProfiles[0][0], clipProfiles[0][1], false, true);
+    } else {
+      applyOffset(clipProfiles[0][2], clipProfiles[0][0], true, false);
+    }
+  } else {
+    if (surfEnum === 'Both') {
+      applyOffset(clipProfiles[0][0], clipProfiles[0][1], false, true);
+      applyOffset(clipProfiles[1][0], clipProfiles[1][1], false, true);
+    } else {
+      applyOffset(clipProfiles[0][0], clipProfiles[0][1], false, true);
+    }
+  }
+
+  return clipProfiles.map(profile => {
+    const reversedProfile = [...profile].reverse();
+    const startVertices = reversedProfile.map(v => [v[0] - size, v[1], v[2]]);
+    const endVertices = reversedProfile.map(v => [...v]);
+
+    return {
+      brushSegments: [{ start: startVertices, end: endVertices }]
+    };
+  });
+}
+
 function getSpinConfiguration(rampEnum, angleRad, size, height) {
   const configs = {
     Right: { axis: [0, 0, 1], center: [0, size, 0], angle: angleRad },
     Left: { axis: [0, 0, 1], center: [0, -size, 0], angle: -angleRad },
     Down: { axis: [0, -1, 0], center: [0, 0, -size], angle: -angleRad },
-    Arc: { axis: [0, -1, 0], center: [0, 0, -size], angle: -angleRad },
-    Up: { axis: [0, -1, 0], center: [0, 0, size + height], angle: angleRad },
-    Dip: { axis: [0, -1, 0], center: [0, 0, size + height], angle: angleRad }
+    Up: { axis: [0, -1, 0], center: [0, 0, size + height], angle: angleRad }
   };
   return configs[rampEnum] || configs.Right;
 }
@@ -167,10 +244,6 @@ function generateClipSolids(params, baseProfiles, spinConfig, segmentCount, soli
     return { brushSegments: segments };
   });
 
-  if ((rampEnum === 'Arc' || rampEnum === 'Dip') && angle !== 0) {
-    applyArcDipTransform(clipSolids, solids, params, segmentCount, angle);
-  }
-
   return clipSolids;
 }
 
@@ -226,36 +299,4 @@ function generateClipSegments(profile, axis, center, stepAngle, segmentCount, ov
   }
 
   return segments;
-}
-
-function applyArcDipTransform(clipSolids, solids, params, segmentCount, angle) {
-  const { rampEnum } = params;
-  const angleRad = (angle * Math.PI) / 180;
-
-  const midStep = Math.floor(segmentCount / 2);
-  const midVertices = solids[0].vertices[midStep];
-
-  const center = midVertices.reduce(
-    (acc, v) => [acc[0] + v[0], acc[1] + v[1], acc[2] + v[2]],
-    [0, 0, 0]
-  ).map(val => val / midVertices.length);
-
-  const rotationAngle = rampEnum === 'Arc' ? angleRad / 2 : -angleRad / 2;
-
-  for (const solid of clipSolids) {
-    for (const segment of solid.brushSegments) {
-      for (const vertices of [segment.start, segment.end]) {
-        for (const vertex of vertices) {
-          vertex[0] -= center[0];
-          vertex[1] -= center[1];
-          vertex[2] -= center[2];
-
-          const rotated = rotateAroundAxis(vertex, [0, 1, 0], [0, 0, 0], rotationAngle);
-          vertex[0] = rotated[0];
-          vertex[1] = rotated[1];
-          vertex[2] = rotated[2];
-        }
-      }
-    }
-  }
 }

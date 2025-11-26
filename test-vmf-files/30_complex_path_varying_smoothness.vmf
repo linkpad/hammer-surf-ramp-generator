@@ -10746,7 +10746,7 @@ world
 entity
 {
 	"id" "338"
-	"classname" "func_detail"
+	"classname" "func_brush"
 	solid
 	{
 		"id" "2"
@@ -16235,6 +16235,7 @@ entity
 			"visgroupautoshown" "1"
 		}
 	}
+	"solidity" "1"
 }
 cameras
 {

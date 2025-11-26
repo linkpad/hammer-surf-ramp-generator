@@ -5,7 +5,8 @@ import { calculateFaceUV } from './uvCalculator.js';
 
 const RAMP_DIRECTION = {
   HORIZONTAL: ['Left', 'Right'],
-  VERTICAL: ['Up', 'Down', 'Dip', 'Arc']
+  VERTICAL: ['Up', 'Down'],
+  STRAIGHT: ['Straight']
 };
 
 export function generateConnectedRamps(SurfRampGeneratorClass, sharedParams, rampConfigs, connectionMode = 'end') {
@@ -260,6 +261,13 @@ function fixClipConnections(clipGroups) {
       const currSeg = segments[i];
 
       if (currSeg.isConnectionStart && prevSeg.isProfileInward !== currSeg.isProfileInward) {
+        // Check if the current ramp is a single-segment ramp (like Straight)
+        // Skip the entire adjustment to avoid creating invalid geometry or gaps
+        const currRampSegments = segments.filter(seg => seg.rampIndex === currSeg.rampIndex);
+        if (currRampSegments.length === 1) {
+          continue;
+        }
+
         const prevRampSegments = segments
           .slice(0, i)
           .map((seg, idx) => ({ segment: seg, index: idx }))
@@ -299,11 +307,19 @@ function generateVisualBrushes(vmfGenerator, solidGroups, sharedParams) {
   }
 
   if (visualBrushes.length > 0) {
-    vmfGenerator.entities.push({
+    const visualEntity = sharedParams.visualEntity || 'func_brush';
+    const entity = {
       id: vmfGenerator.getNextEntityId(),
-      classname: "func_detail",
+      classname: visualEntity,
       solids: visualBrushes
-    });
+    };
+
+    // Add solidity property for func_brush (1 = never solid)
+    if (visualEntity === 'func_brush') {
+      entity.solidity = "1";
+    }
+
+    vmfGenerator.entities.push(entity);
   }
 }
 

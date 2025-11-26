@@ -15,11 +15,19 @@ export function generateVMF(generator, options = {}) {
   const visualBrushes = generateVisualBrushes(vmfGenerator, solids, generator.params, capMaterials, isLoop);
 
   if (visualBrushes.length > 0) {
-    vmfGenerator.entities.push({
+    const visualEntity = generator.params.visualEntity || 'func_brush';
+    const entity = {
       id: vmfGenerator.getNextEntityId(),
-      classname: "func_detail",
+      classname: visualEntity,
       solids: visualBrushes
-    });
+    };
+
+    // Add solidity property for func_brush (1 = never solid)
+    if (visualEntity === 'func_brush') {
+      entity.solidity = "1";
+    }
+
+    vmfGenerator.entities.push(entity);
   }
 
   if (clipSolids?.length > 0) {

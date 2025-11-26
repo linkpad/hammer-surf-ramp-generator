@@ -1,7 +1,17 @@
 import { normalize, transformVertex, transformVector, createBasisMatrix, invertTransformMatrix, multiplyMatrices, rotateAroundAxis } from './mathUtils.js';
 
 export function getConnectionFrame(generator, isStartFrame) {
+  const { angle, size, rampEnum, height } = generator.params;
+  const isStraight = rampEnum === 'Straight' || angle === 0;
+
   if (isStartFrame) {
+    if (isStraight) {
+      return {
+        position: [0, 0, 0],
+        forward: [1, 0, 0],
+        up: [0, 0, 1]
+      };
+    }
     return {
       position: [0, 0, 0],
       forward: [1, 0, 0],
@@ -9,11 +19,10 @@ export function getConnectionFrame(generator, isStartFrame) {
     };
   }
 
-  const { angle, size, rampEnum, height } = generator.params;
-
-  if (angle === 0) {
+  if (isStraight) {
+    // For straight ramps, end is at -size
     return {
-      position: [size, 0, 0],
+      position: [-size, 0, 0],
       forward: [1, 0, 0],
       up: [0, 0, 1]
     };
@@ -38,9 +47,7 @@ function getSpinConfig(rampEnum, angleRad, size, height) {
     Right: { axis: [0, 0, 1], center: [0, size, 0], angle: angleRad },
     Left: { axis: [0, 0, 1], center: [0, -size, 0], angle: -angleRad },
     Down: { axis: [0, -1, 0], center: [0, 0, -size], angle: -angleRad },
-    Arc: { axis: [0, -1, 0], center: [0, 0, -size], angle: -angleRad },
-    Up: { axis: [0, -1, 0], center: [0, 0, size + height], angle: angleRad },
-    Dip: { axis: [0, -1, 0], center: [0, 0, size + height], angle: angleRad }
+    Up: { axis: [0, -1, 0], center: [0, 0, size + height], angle: angleRad }
   };
   return configs[rampEnum] || configs.Right;
 }

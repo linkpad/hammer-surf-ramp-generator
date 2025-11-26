@@ -14,7 +14,8 @@
     width: 256,
     height: 320,
     smoothness: 16,
-    uvScale: 0.25
+    uvScale: 0.25,
+    visualEntity: 'func_brush'
   };
 
   // Individual ramp configurations
@@ -456,6 +457,13 @@
         <label>Material Name</label>
         <input type="text" bind:value={sharedParams.materialName} on:input={generateAllRamps} />
       </div>
+      <div class="control-group">
+        <label>Visual Entity Type</label>
+        <select bind:value={sharedParams.visualEntity} on:change={generateAllRamps}>
+          <option value="func_brush">func_brush (never solid)</option>
+          <option value="func_detail_illusionary">func_detail_illusionary</option>
+        </select>
+      </div>
     </div>
 
     <div class="section">
@@ -549,36 +557,39 @@
                 <div class="control-group">
                   <label>Ramp Direction</label>
                   <select bind:value={ramp.rampEnum} on:change={generateAllRamps}>
+                    <option value="Straight">Straight</option>
                     <option value="Left">Left</option>
                     <option value="Right">Right</option>
                     <option value="Up">Up</option>
                     <option value="Down">Down</option>
-                    <option value="Dip">Dip</option>
-                    <option value="Arc">Arc</option>
                   </select>
                 </div>
 
+                {#if ramp.rampEnum !== 'Straight'}
                 <div class="control-group">
                   <label>Angle (degrees)</label>
                   <input type="range" min="0" max="360" step="1" bind:value={ramp.angle} on:input={generateAllRamps} />
                   <input type="number" min="0" max="360" step="1" bind:value={ramp.angle} on:input={generateAllRamps} />
                 </div>
+                {/if}
 
                 <div class="control-group">
                   <label>Size</label>
-                  <input type="range" min="0" max="2048" step="16" bind:value={ramp.size} on:input={generateAllRamps} />
-                  <input type="number" min="0" max="2048" step="16" bind:value={ramp.size} on:input={generateAllRamps} />
+                  <input type="range" min="0" max="4096" step="16" bind:value={ramp.size} on:input={generateAllRamps} />
+                  <input type="number" min="0" max="4096" step="16" bind:value={ramp.size} on:input={generateAllRamps} />
                 </div>
 
+                {#if ramp.rampEnum !== 'Straight'}
                 <div class="control-group">
                   <label>Smoothness</label>
                   <input type="range" min="3" max="128" step="1" bind:value={ramp.smoothness} on:input={generateAllRamps} />
                   <input type="number" min="3" max="128" step="1" bind:value={ramp.smoothness} on:input={generateAllRamps} />
                 </div>
+                {/if}
               </div>
             {:else}
               <div class="ramp-item-summary">
-                <div>{ramp.rampEnum} • {ramp.angle}° • {ramp.size}u • {ramp.smoothness} segs</div>
+                <div>{ramp.rampEnum}{ramp.rampEnum !== 'Straight' ? ` • ${ramp.angle}° • ${ramp.smoothness} segs` : ''} • {ramp.size}u</div>
               </div>
             {/if}
           </div>

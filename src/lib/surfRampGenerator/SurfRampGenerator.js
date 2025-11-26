@@ -17,7 +17,8 @@ const DEFAULT_PARAMS = {
   smoothness: 16,
   angle: 90,
   size: 1024,
-  uvScale: 0.25
+  uvScale: 0.25,
+  visualEntity: 'func_brush'
 };
 
 export class SurfRampGenerator {
