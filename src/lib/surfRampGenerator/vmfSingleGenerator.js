@@ -22,7 +22,6 @@ export function generateVMF(generator, options = {}) {
       solids: visualBrushes
     };
 
-    // Add solidity property for func_brush (1 = never solid)
     if (visualEntity === 'func_brush') {
       entity.solidity = "1";
     }

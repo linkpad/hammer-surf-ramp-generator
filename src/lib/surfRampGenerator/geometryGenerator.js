@@ -39,7 +39,6 @@ export function generateGeometry(params) {
 function generateStraightGeometry(baseProfiles, size, styleEnum, surfEnum, rampEnum, thickness) {
   const solids = baseProfiles.map(profile => {
     const reversedProfile = [...profile].reverse();
-    // Ramp extends from -size to 0, so the "end" is at the origin
     const startVertices = reversedProfile.map(v => [v[0] - size, v[1], v[2]]);
     const endVertices = reversedProfile.map(v => [...v]);
 
@@ -65,7 +64,7 @@ function generateStraightGeometry(baseProfiles, size, styleEnum, surfEnum, rampE
 }
 
 function generateStraightClipSolids(baseProfiles, size, styleEnum, surfEnum) {
-  const offsetAmount = 1.0;
+  const offsetAmount = 0;
 
   let clipProfiles = baseProfiles.map(profile => profile.map(v => [...v]));
 
@@ -95,28 +94,57 @@ function generateStraightClipSolids(baseProfiles, size, styleEnum, surfEnum) {
   if (styleEnum === 'Wedge') {
     if (surfEnum === 'Both') {
       const profile = clipProfiles[0];
-      const peak = [...profile[0]];
-      const bottomRight = [...profile[1]];
-      const bottomLeft = [...profile[2]];
-      const bottomCenter = [0, 0, 0];
+      const hasBase = profile.length > 3;
+      
+      if (hasBase) {
+        const peak = [...profile[0]];
+        const rightCut = [...profile[1]];
+        const rightBase = [...profile[2]];
+        const leftBase = [...profile[3]];
+        const leftCut = [...profile[4]];
+        const centerBottom = [0, 0, 0];
 
-      const peakL = [...peak];
-      const bottomCenterL = [...bottomCenter];
-      const bottomLeftL = [...bottomLeft];
-      applyOffset(bottomLeftL, peakL, true, false);
-      const leftProfile = [peakL, bottomCenterL, bottomLeftL];
+        const peakL = [...peak];
+        const centerBottomL = [...centerBottom];
+        const leftBaseL = [...leftBase];
+        const leftCutL = [...leftCut];
+        applyOffset(leftCutL, peakL, true, false);
+        const leftProfile = [peakL, centerBottomL, leftBaseL, leftCutL];
 
-      const peakR = [...peak];
-      const bottomRightR = [...bottomRight];
-      const bottomCenterR = [...bottomCenter];
-      applyOffset(peakR, bottomRightR, false, true);
-      const rightProfile = [peakR, bottomRightR, bottomCenterR];
+        const peakR = [...peak];
+        const rightCutR = [...rightCut];
+        const rightBaseR = [...rightBase];
+        const centerBottomR = [...centerBottom];
+        applyOffset(peakR, rightCutR, false, true);
+        const rightProfile = [peakR, rightCutR, rightBaseR, centerBottomR];
 
-      clipProfiles = [leftProfile, rightProfile];
+        clipProfiles = [leftProfile, rightProfile];
+      } else {
+        const peak = [...profile[0]];
+        const slopeRight = [...profile[1]];
+        const slopeLeft = [...profile[2]];
+        const bottomCenter = [0, 0, 0];
+
+        const peakL = [...peak];
+        const bottomCenterL = [...bottomCenter];
+        const slopeLeftL = [...slopeLeft];
+        applyOffset(slopeLeftL, peakL, true, false);
+        const leftProfile = [peakL, bottomCenterL, slopeLeftL];
+
+        const peakR = [...peak];
+        const slopeRightR = [...slopeRight];
+        const bottomCenterR = [...bottomCenter];
+        applyOffset(peakR, slopeRightR, false, true);
+        const rightProfile = [peakR, slopeRightR, bottomCenterR];
+
+        clipProfiles = [leftProfile, rightProfile];
+      }
     } else if (surfEnum === 'Left') {
       applyOffset(clipProfiles[0][0], clipProfiles[0][1], false, true);
     } else {
-      applyOffset(clipProfiles[0][2], clipProfiles[0][0], true, false);
+      const profile = clipProfiles[0];
+      const lastIdx = profile.length - 1;
+      applyOffset(profile[lastIdx], profile[0], true, false);
     }
   } else {
     if (surfEnum === 'Both') {
@@ -169,12 +197,14 @@ function generateCurvedSolids(baseProfiles, spinConfig, segmentCount) {
 }
 
 function generateClipSolids(params, baseProfiles, spinConfig, segmentCount, solids) {
-  const { angle, size, rampEnum, styleEnum, surfEnum } = params;
+  const { angle, size, rampEnum, styleEnum, surfEnum, baseHeight = 0, useVerticalBase = false } = params;
   const { axis, center, angle: spinAngle } = spinConfig;
 
   let clipProfiles = baseProfiles.map(profile => profile.map(v => [...v]));
-  const offsetAmount = 1.0;
+  const offsetAmount = 0;
   const isHorizontalTurn = RAMP_DIRECTION.HORIZONTAL.includes(rampEnum);
+  const isVerticalTurn = RAMP_DIRECTION.VERTICAL.includes(rampEnum);
+  const hasBase = baseHeight > 0 || useVerticalBase;
 
   const applyOffset = (point1, point2, keepPoint1Z = false, keepPoint2Z = false) => {
     const dy = point2[1] - point1[1];
@@ -202,28 +232,66 @@ function generateClipSolids(params, baseProfiles, spinConfig, segmentCount, soli
   if (styleEnum === 'Wedge') {
     if (surfEnum === 'Both') {
       const profile = clipProfiles[0];
-      const peak = [...profile[0]];
-      const bottomRight = [...profile[1]];
-      const bottomLeft = [...profile[2]];
-      const bottomCenter = [0, 0, 0];
+      const profileHasBase = profile.length > 3;
+      
+      if (profileHasBase) {
+        const peak = [...profile[0]];
+        const rightCut = [...profile[1]];
+        const rightBase = [...profile[2]];
+        const leftBase = [...profile[3]];
+        const leftCut = [...profile[4]];
+        const centerBottom = [0, 0, 0];
 
-      const peakL = [...peak];
-      const bottomCenterL = [...bottomCenter];
-      const bottomLeftL = [...bottomLeft];
-      applyOffset(bottomLeftL, peakL, isHorizontalTurn, false);
-      const leftProfile = [peakL, bottomCenterL, bottomLeftL];
+        const peakL = [...peak];
+        const centerBottomL = [...centerBottom];
+        const leftBaseL = [...leftBase];
+        const leftCutL = [...leftCut];
+        applyOffset(leftCutL, peakL, isHorizontalTurn, false);
+        const leftProfile = [peakL, centerBottomL, leftBaseL, leftCutL];
 
-      const peakR = [...peak];
-      const bottomRightR = [...bottomRight];
-      const bottomCenterR = [...bottomCenter];
-      applyOffset(peakR, bottomRightR, false, isHorizontalTurn);
-      const rightProfile = [peakR, bottomRightR, bottomCenterR];
+        const peakR = [...peak];
+        const rightCutR = [...rightCut];
+        const rightBaseR = [...rightBase];
+        const centerBottomR = [...centerBottom];
+        applyOffset(peakR, rightCutR, false, isHorizontalTurn);
+        const rightProfile = [peakR, rightCutR, rightBaseR, centerBottomR];
 
-      clipProfiles = [leftProfile, rightProfile];
+        clipProfiles = [leftProfile, rightProfile];
+      } else {
+        const peak = [...profile[0]];
+        const slopeRight = [...profile[1]];
+        const slopeLeft = [...profile[2]];
+        const bottomCenter = [0, 0, 0];
+
+        const peakL = [...peak];
+        const bottomCenterL = [...bottomCenter];
+        const slopeLeftL = [...slopeLeft];
+        applyOffset(slopeLeftL, peakL, isHorizontalTurn, false);
+        const leftProfile = [peakL, bottomCenterL, slopeLeftL];
+
+        const peakR = [...peak];
+        const slopeRightR = [...slopeRight];
+        const bottomCenterR = [...bottomCenter];
+        applyOffset(peakR, slopeRightR, false, isHorizontalTurn);
+        const rightProfile = [peakR, slopeRightR, bottomCenterR];
+
+        clipProfiles = [leftProfile, rightProfile];
+      }
     } else if (surfEnum === 'Left') {
-      applyOffset(clipProfiles[0][0], clipProfiles[0][1], false, isHorizontalTurn);
+      if (hasBase && clipProfiles[0].length > 3) {
+        const profile = clipProfiles[0];
+        applyOffset(profile[0], profile[1], false, isHorizontalTurn);
+      } else {
+        applyOffset(clipProfiles[0][0], clipProfiles[0][1], false, isHorizontalTurn);
+      }
     } else {
-      applyOffset(clipProfiles[0][2], clipProfiles[0][0], isHorizontalTurn, false);
+      const profile = clipProfiles[0];
+      const lastIdx = profile.length - 1;
+      if (hasBase && profile.length > 3) {
+        applyOffset(profile[lastIdx], profile[0], isHorizontalTurn, false);
+      } else {
+        applyOffset(profile[lastIdx], profile[0], isHorizontalTurn, false);
+      }
     }
   } else {
     if (surfEnum === 'Both') {
@@ -238,9 +306,11 @@ function generateClipSolids(params, baseProfiles, spinConfig, segmentCount, soli
   const isLoop = Math.abs(angle) >= 360;
   const overlapAngle = calculateOverlapAngle(size, stepAngle, isLoop);
 
+  const useNaturalOverlap = isVerticalTurn && hasBase;
+
   const clipSolids = clipProfiles.map(profile => {
     const isInward = isProfileInward(profile, rampEnum, surfEnum);
-    const segments = generateClipSegments(profile, axis, center, stepAngle, segmentCount, overlapAngle, isInward, isLoop);
+    const segments = generateClipSegments(profile, axis, center, stepAngle, segmentCount, overlapAngle, isInward, isLoop, useNaturalOverlap);
     return { brushSegments: segments };
   });
 
@@ -275,7 +345,7 @@ function isProfileInward(profile, rampEnum, surfEnum) {
   return false;
 }
 
-function generateClipSegments(profile, axis, center, stepAngle, segmentCount, overlapAngle, isInward, isLoop) {
+function generateClipSegments(profile, axis, center, stepAngle, segmentCount, overlapAngle, isInward, isLoop, useNaturalOverlap = false) {
   const segments = [];
   const overlapDirection = Math.sign(stepAngle || 1);
   const signedOverlap = overlapAngle * overlapDirection;

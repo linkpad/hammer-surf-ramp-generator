@@ -15,7 +15,9 @@
     height: 320,
     smoothness: 16,
     uvScale: 0.25,
-    visualEntity: 'func_brush'
+    visualEntity: 'func_brush',
+    baseHeight: 0,
+    useVerticalBase: false
   };
 
   // Individual ramp configurations
@@ -51,12 +53,19 @@
     
     sharedParams.height = Math.max(64, Math.min(1024, newHeight));
     
+    if (sharedParams.baseHeight >= sharedParams.height) {
+      sharedParams.baseHeight = Math.max(0, sharedParams.height - 8);
+    }
+    
     generateAllRamps();
     updatingFromSlope = false;
   }
 
   function onWidthHeightChange() {
     if (!updatingFromSlope) {
+      if (sharedParams.baseHeight >= sharedParams.height) {
+        sharedParams.baseHeight = Math.max(0, sharedParams.height - 8);
+      }
       generateAllRamps();
     }
   }
@@ -127,7 +136,6 @@
   }
 
   function generateAllRamps() {
-    // Ensure all ramps have smoothness property (for backward compatibility)
     ramps = ramps.map(ramp => ({
       ...ramp,
       smoothness: ramp.smoothness !== undefined ? ramp.smoothness : sharedParams.smoothness
@@ -155,7 +163,6 @@
       return;
     }
     
-    // Use unified VMF generation for connected ramps
     const vmfGenerator = SurfRampGenerator.generateConnectedVMF(generatedRamps);
     
     if (!vmfGenerator) {
@@ -438,6 +445,19 @@
     font-size: 11px;
     color: #888;
   }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
 </style>
 
 <div class="app">
@@ -485,6 +505,20 @@
         <input type="range" min="5" max="85" step="0.5" value={slopeAngle} on:input={(e) => updateDimensionsFromSlope(parseFloat(e.target.value))} />
         <input type="number" min="5" max="85" step="0.5" value={slopeAngle} on:input={(e) => updateDimensionsFromSlope(parseFloat(e.target.value))} />
       </div>
+      {#if sharedParams.styleEnum === 'Wedge'}
+      <div class="control-group">
+        <label>Base Height (0 = no base)</label>
+        <input type="range" min="0" max={sharedParams.height - 1} step="8" bind:value={sharedParams.baseHeight} on:input={generateAllRamps} />
+        <input type="number" min="0" max={sharedParams.height - 1} step="8" bind:value={sharedParams.baseHeight} on:input={generateAllRamps} />
+      </div>
+      {:else if sharedParams.styleEnum === 'Thin'}
+      <div class="control-group">
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={sharedParams.useVerticalBase} on:change={generateAllRamps} />
+          Use Vertical Base
+        </label>
+      </div>
+      {/if}
     </div>
 
     <div class="section">

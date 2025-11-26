@@ -20,7 +20,6 @@ export function getConnectionFrame(generator, isStartFrame) {
   }
 
   if (isStraight) {
-    // For straight ramps, end is at -size
     return {
       position: [-size, 0, 0],
       forward: [1, 0, 0],

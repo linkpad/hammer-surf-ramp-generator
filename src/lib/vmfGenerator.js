@@ -122,7 +122,6 @@ export class VMFGenerator {
         vmf += `\t\t}\n`;
       }
       
-      // Add editor block for solid
       if (solid.editor) {
           vmf += `\t\teditor\n\t\t{\n`;
           vmf += `\t\t\t"color" "${solid.editor.color}"\n`;
