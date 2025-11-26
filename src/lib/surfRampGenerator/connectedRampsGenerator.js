@@ -26,6 +26,7 @@ export function generateConnectedRamps(SurfRampGeneratorClass, sharedParams, ram
     transforms,
     capStates,
     sharedParams,
+    connectionMode,
     combinedGeometry: {
       ...generators[0].generateGeometry(),
       solids: allSolids
@@ -126,7 +127,7 @@ function buildRampData(generators, transforms, capStates) {
 }
 
 export function generateConnectedVMF(connectedRampsData) {
-  const { ramps, generators, transforms, sharedParams } = connectedRampsData;
+  const { ramps, generators, transforms, sharedParams, connectionMode = 'end' } = connectedRampsData;
 
   if (!ramps?.length) return null;
 
@@ -134,15 +135,15 @@ export function generateConnectedVMF(connectedRampsData) {
   const solidGroups = [];
   const clipGroups = [];
 
-  collectBrushData(ramps, generators, transforms, solidGroups, clipGroups);
-  fixClipConnections(clipGroups);
+  collectBrushData(ramps, generators, transforms, solidGroups, clipGroups, connectionMode);
+  fixClipConnections(clipGroups, connectionMode);
   generateVisualBrushes(vmfGenerator, solidGroups, sharedParams);
   generateClipBrushes(vmfGenerator, clipGroups, sharedParams);
 
   return vmfGenerator;
 }
 
-function collectBrushData(ramps, generators, transforms, solidGroups, clipGroups) {
+function collectBrushData(ramps, generators, transforms, solidGroups, clipGroups, connectionMode) {
   for (let rampIdx = 0; rampIdx < ramps.length; rampIdx++) {
     const ramp = ramps[rampIdx];
     const transform = transforms[rampIdx];
@@ -151,7 +152,7 @@ function collectBrushData(ramps, generators, transforms, solidGroups, clipGroups
     const isLastRamp = rampIdx === ramps.length - 1;
 
     collectSolidSegments(geometry, transform, ramp.capMaterials, solidGroups, isFirstRamp, isLastRamp);
-    collectClipSegments(geometry, generators[rampIdx], transform, clipGroups, rampIdx, isFirstRamp, isLastRamp);
+    collectClipSegments(geometry, generators[rampIdx], transform, clipGroups, rampIdx, isFirstRamp, isLastRamp, connectionMode);
   }
 }
 
@@ -184,7 +185,7 @@ function collectSolidSegments(geometry, transform, capMaterials, solidGroups, is
   }
 }
 
-function collectClipSegments(geometry, generator, transform, clipGroups, rampIdx, isFirstRamp, isLastRamp) {
+function collectClipSegments(geometry, generator, transform, clipGroups, rampIdx, isFirstRamp, isLastRamp, connectionMode) {
   if (!geometry.clipSolids?.length) return;
 
   const baseProfiles = generator.generateProfiles();
@@ -207,21 +208,32 @@ function collectClipSegments(geometry, generator, transform, clipGroups, rampIdx
       const isFirstSegment = segIdx === 0;
       const isLastSegment = segIdx === clipSolid.brushSegments.length - 1;
 
+      let isConnectionStart, isConnectionEnd;
+      if (connectionMode === 'start') {
+        isConnectionStart = isFirstRamp && isFirstSegment;
+        isConnectionEnd = !isFirstRamp && isLastSegment;
+      } else {
+        isConnectionStart = !isFirstRamp && isFirstSegment;
+        isConnectionEnd = !isLastRamp && isLastSegment;
+      }
+
       clipGroups[clipIdx].allSegments.push({
         start: segment.start.map(v => transformVertex([...v], transform)),
         end: segment.end.map(v => transformVertex([...v], transform)),
         rampIndex: rampIdx,
+        rampEnum: geometry.rampEnum,
         segmentIndexInRamp: segIdx,
         isFirstOfRamp: isFirstRamp && isFirstSegment,
         isLastOfRamp: isLastRamp && isLastSegment,
         isProfileInward,
-        isConnectionStart: !isFirstRamp && isFirstSegment,
-        isConnectionEnd: !isLastRamp && isLastSegment
+        isConnectionStart,
+        isConnectionEnd
       });
     }
 
     clipGroups[clipIdx].rampBoundaries.push({
       rampIndex: rampIdx,
+      rampEnum: geometry.rampEnum,
       startIdx: rampStartIdx,
       endIdx: clipGroups[clipIdx].allSegments.length - 1,
       isFirstRamp,
@@ -251,43 +263,108 @@ function determineProfileInwardness(geometry, generator, baseProfiles, clipIdx) 
   return false;
 }
 
-function fixClipConnections(clipGroups) {
+function areRampAxesCompatible(rampEnum1, rampEnum2) {
+  const isHorizontal1 = RAMP_DIRECTION.HORIZONTAL.includes(rampEnum1);
+  const isHorizontal2 = RAMP_DIRECTION.HORIZONTAL.includes(rampEnum2);
+  const isVertical1 = RAMP_DIRECTION.VERTICAL.includes(rampEnum1);
+  const isVertical2 = RAMP_DIRECTION.VERTICAL.includes(rampEnum2);
+  const isStraight1 = RAMP_DIRECTION.STRAIGHT.includes(rampEnum1) || !rampEnum1;
+  const isStraight2 = RAMP_DIRECTION.STRAIGHT.includes(rampEnum2) || !rampEnum2;
+  
+  if (isStraight1 || isStraight2) return true;
+  if (isHorizontal1 && isHorizontal2) return true;
+  if (isVertical1 && isVertical2) return true;
+  
+  return false;
+}
+
+function fixClipConnections(clipGroups, connectionMode = 'end') {
   for (const clipGroup of clipGroups) {
     const segments = clipGroup.allSegments;
-    const segmentsToRemove = [];
+    const boundaries = clipGroup.rampBoundaries;
+    const segmentsToRemove = new Set();
 
-    for (let i = 1; i < segments.length; i++) {
-      const prevSeg = segments[i - 1];
-      const currSeg = segments[i];
-
-      if (currSeg.isConnectionStart && prevSeg.isProfileInward !== currSeg.isProfileInward) {
-        // Check if the current ramp is a single-segment ramp (like Straight)
-        // Skip the entire adjustment to avoid creating invalid geometry or gaps
-        const currRampSegments = segments.filter(seg => seg.rampIndex === currSeg.rampIndex);
-        if (currRampSegments.length === 1) {
+    if (connectionMode === 'start') {
+      const firstRampBoundary = boundaries[0];
+      const firstRampSegCount = firstRampBoundary.endIdx - firstRampBoundary.startIdx + 1;
+      
+      const firstRampSegments = [];
+      for (let i = firstRampBoundary.startIdx; i <= firstRampBoundary.endIdx; i++) {
+        firstRampSegments.push({ segment: segments[i], index: i });
+      }
+      
+      const firstRampFirstSeg = segments[firstRampBoundary.startIdx];
+      let firstRampAdjusted = false;
+      
+      for (let boundaryIdx = 1; boundaryIdx < boundaries.length; boundaryIdx++) {
+        const currRampBoundary = boundaries[boundaryIdx];
+        const currRampLastSegIdx = currRampBoundary.endIdx;
+        const currRampLastSeg = segments[currRampLastSegIdx];
+        
+        if (!areRampAxesCompatible(firstRampBoundary.rampEnum, currRampBoundary.rampEnum)) {
           continue;
         }
+        
+        if (firstRampFirstSeg.isProfileInward !== currRampLastSeg.isProfileInward) {
+          if (firstRampSegCount === 1) {
+            continue;
+          }
+          
+          if (firstRampSegments.length >= 2 && !firstRampAdjusted) {
+            const first = firstRampSegments[0];
+            const second = firstRampSegments[1];
+            
+            currRampLastSeg.end = firstRampFirstSeg.isProfileInward
+              ? first.segment.end.map(v => [...v])
+              : second.segment.start.map(v => [...v]);
+            
+            segmentsToRemove.add(first.index);
+            firstRampAdjusted = true;
+          } else if (firstRampAdjusted) {
+            const second = firstRampSegments[1];
+            currRampLastSeg.end = firstRampFirstSeg.isProfileInward
+              ? second.segment.start.map(v => [...v])
+              : second.segment.start.map(v => [...v]);
+          }
+        }
+      }
+    } else {
+      for (let i = 1; i < segments.length; i++) {
+        const prevSeg = segments[i - 1];
+        const currSeg = segments[i];
 
-        const prevRampSegments = segments
-          .slice(0, i)
-          .map((seg, idx) => ({ segment: seg, index: idx }))
-          .filter(item => item.segment.rampIndex === prevSeg.rampIndex);
+        if (currSeg.isConnectionStart && prevSeg.isProfileInward !== currSeg.isProfileInward) {
+          if (!areRampAxesCompatible(prevSeg.rampEnum, currSeg.rampEnum)) {
+            continue;
+          }
+          
+          const currRampSegments = segments.filter(seg => seg.rampIndex === currSeg.rampIndex);
+          if (currRampSegments.length === 1) {
+            continue;
+          }
 
-        if (prevRampSegments.length >= 2) {
-          const secondToLast = prevRampSegments[prevRampSegments.length - 2];
-          const last = prevRampSegments[prevRampSegments.length - 1];
+          const prevRampSegments = segments
+            .slice(0, i)
+            .map((seg, idx) => ({ segment: seg, index: idx }))
+            .filter(item => item.segment.rampIndex === prevSeg.rampIndex);
 
-          currSeg.start = prevSeg.isProfileInward
-            ? last.segment.start.map(v => [...v])
-            : secondToLast.segment.end.map(v => [...v]);
+          if (prevRampSegments.length >= 2) {
+            const secondToLast = prevRampSegments[prevRampSegments.length - 2];
+            const last = prevRampSegments[prevRampSegments.length - 1];
 
-          segmentsToRemove.push(last.index);
+            currSeg.start = prevSeg.isProfileInward
+              ? last.segment.start.map(v => [...v])
+              : secondToLast.segment.end.map(v => [...v]);
+
+            segmentsToRemove.add(last.index);
+          }
         }
       }
     }
 
-    for (let i = segmentsToRemove.length - 1; i >= 0; i--) {
-      segments.splice(segmentsToRemove[i], 1);
+    const sortedToRemove = Array.from(segmentsToRemove).sort((a, b) => b - a);
+    for (const idx of sortedToRemove) {
+      segments.splice(idx, 1);
     }
   }
 }
@@ -314,7 +391,6 @@ function generateVisualBrushes(vmfGenerator, solidGroups, sharedParams) {
       solids: visualBrushes
     };
 
-    // Add solidity property for func_brush (1 = never solid)
     if (visualEntity === 'func_brush') {
       entity.solidity = "1";
     }
