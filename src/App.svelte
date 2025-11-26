@@ -277,15 +277,6 @@
     color: #e0e0e0;
   }
 
-  .info-display {
-    background: #1a1a1a;
-    padding: 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    color: #4a9eff;
-    margin-top: 4px;
-  }
-
   .control-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -336,10 +327,6 @@
     background: #444;
   }
 
-  .view-controls button.active {
-    background: #4a9eff;
-  }
-
   .views-container {
     flex: 1;
     display: grid;
@@ -353,12 +340,6 @@
     background: #1a1a1a;
     position: relative;
     overflow: hidden;
-  }
-
-  .three-d-view canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
   }
 
   .two-d-view {

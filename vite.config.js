@@ -6,6 +6,15 @@ export default defineConfig({
   base: '/hammer-surf-ramp-generator/',
   server: {
     port: 5173
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three']
+        }
+      }
+    }
   }
 });
 
