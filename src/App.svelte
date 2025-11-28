@@ -38,6 +38,42 @@
   $: slopeAngle = calculateSlopeAngle(sharedParams.width, sharedParams.height);
   let updatingFromSlope = false;
 
+  // Width/Height presets (4:5 aspect ratio)
+  const widthHeightPresets = [
+    { width: 128, height: 160 },
+    { width: 160, height: 200 },
+    { width: 192, height: 240 },
+    { width: 224, height: 280 },
+    { width: 256, height: 320 },
+    { width: 288, height: 360 },
+    { width: 320, height: 400 },
+    { width: 352, height: 440 },
+    { width: 384, height: 480 },
+    { width: 416, height: 520 },
+    { width: 448, height: 560 },
+    { width: 480, height: 600 },
+    { width: 512, height: 640 },
+    { width: 544, height: 680 },
+    { width: 576, height: 720 },
+    { width: 608, height: 760 },
+    { width: 640, height: 800 },
+    { width: 672, height: 840 },
+    { width: 704, height: 880 },
+    { width: 736, height: 920 },
+    { width: 768, height: 960 }
+  ];
+
+  let selectedPresetId = widthHeightPresets.findIndex(p => p.width === sharedParams.width && p.height === sharedParams.height); // -1 means custom
+
+  function handlePresetChange() {
+    if (selectedPresetId >= 0 && selectedPresetId < widthHeightPresets.length) {
+      const preset = widthHeightPresets[selectedPresetId];
+      sharedParams.width = preset.width;
+      sharedParams.height = preset.height;
+      onWidthHeightChange();
+    }
+  }
+
   function calculateSlopeAngle(width, height) {
     const angleRad = Math.atan2(height, width);
     const angleDeg = (angleRad * 180) / Math.PI;
@@ -67,6 +103,12 @@
         sharedParams.baseHeight = Math.max(0, sharedParams.height - 8);
       }
       generateAllRamps();
+    }
+
+    const matchingIndex = widthHeightPresets.findIndex(p => p.width === sharedParams.width && p.height === sharedParams.height);
+    const newPresetId = matchingIndex >= 0 ? matchingIndex : -1;
+    if (selectedPresetId !== newPresetId) {
+      selectedPresetId = newPresetId;
     }
   }
 
@@ -488,6 +530,15 @@
 
     <div class="section">
       <div class="section-title">Slope Dimensions (Shared)</div>
+      <div class="control-group">
+        <label>Presets (4:5 ratio)</label>
+        <select bind:value={selectedPresetId} on:change={handlePresetChange}>
+          <option value={-1}>Custom</option>
+          {#each widthHeightPresets as preset, index}
+            <option value={index}>{preset.width} × {preset.height}</option>
+          {/each}
+        </select>
+      </div>
       <div class="control-row">
         <div class="control-group">
           <label>Width</label>
@@ -508,8 +559,8 @@
       {#if sharedParams.styleEnum === 'Wedge'}
       <div class="control-group">
         <label>Base Height (0 = no base)</label>
-        <input type="range" min="0" max={sharedParams.height - 1} step="8" bind:value={sharedParams.baseHeight} on:input={generateAllRamps} />
-        <input type="number" min="0" max={sharedParams.height - 1} step="8" bind:value={sharedParams.baseHeight} on:input={generateAllRamps} />
+        <input type="range" min="0" max={sharedParams.height / 2} step="1" bind:value={sharedParams.baseHeight} on:input={generateAllRamps} />
+        <input type="number" min="0" max={sharedParams.height / 2} step="1" bind:value={sharedParams.baseHeight} on:input={generateAllRamps} />
       </div>
       {:else if sharedParams.styleEnum === 'Thin'}
       <div class="control-group">
